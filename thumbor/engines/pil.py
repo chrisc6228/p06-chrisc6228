@@ -241,6 +241,21 @@ class Engine(BaseEngine):
 
         return ".jpeg"
 
+    def get_fully_transparent_index(self):
+        # Returns the index of the first palette entry with alpha 0, or None.
+        if self.image.mode != "P":
+            return None
+
+        palette = self.image.getpalette("RGBA")
+        if not palette:
+            return None
+
+        for index in range(len(palette) // 4):
+            if palette[index * 4 + 3] == 0:
+                return index
+
+        return None
+
     # TODO: Refactor this
     def read(  # noqa
         self, extension=None, quality=None
@@ -277,6 +292,13 @@ class Engine(BaseEngine):
                     else None
                 )
                 self.image = self.image.quantize(method=quantize_method)
+
+                # quantize() keeps the alpha of the transparent palette
+                # entry but does not set info["transparency"], so the GIF
+                # writer would not know which index is transparent.
+                transparent_index = self.get_fully_transparent_index()
+                if transparent_index is not None:
+                    self.image.info["transparency"] = transparent_index
 
         ext = requested_extension or self.get_default_extension()
 
