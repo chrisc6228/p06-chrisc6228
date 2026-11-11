@@ -298,6 +298,11 @@ class Transformer:
             )
             crop_height = source_height
 
+        # Rounding can make a crop side 0 (e.g. a 1x1 source at 50x25),
+        # which leaves an empty image. Keep at least one pixel per side.
+        crop_width = max(1, crop_width)
+        crop_height = max(1, crop_height)
+
         crop_left = int(
             round(
                 min(
@@ -386,19 +391,25 @@ class Transformer:
         ):
             return
 
+        # A zero target side (e.g. width-only requests) or a zero rounded
+        # side (e.g. 940x2 into a 1x1 box) would divide by zero here or
+        # hand PIL an empty size. Keep at least one pixel per side.
+        target_width = self.target_width or 1
+        target_height = self.target_height or 1
+
         # add 1e-5 to get .5 rounding up in Python3 as it was in Python2
         if (
-            source_width / self.target_width * sign
-            >= source_height / self.target_height * sign
+            source_width / target_width * sign
+            >= source_height / target_height * sign
         ):
             resize_height = round(
-                source_height * self.target_width / source_width + 1e-5
+                source_height * target_width / source_width + 1e-5
             )
-            resize_width = self.target_width
+            resize_width = target_width
         else:
-            resize_height = self.target_height
+            resize_height = target_height
             resize_width = round(
-                source_width * self.target_height / source_height + 1e-5
+                source_width * target_height / source_height + 1e-5
             )
 
         # ensure that filter should work on the real image size
@@ -417,7 +428,9 @@ class Transformer:
         self.context.request.width = int(max(requested_width, resize_width))
         self.context.request.height = int(max(requested_height, resize_height))
 
-        self.engine.resize(resize_width, resize_height)
+        self.engine.resize(
+            max(1, resize_width), max(1, resize_height)
+        )  # never hand PIL an empty size
 
     def debug(self):
         if not self.context.request.focal_points:
